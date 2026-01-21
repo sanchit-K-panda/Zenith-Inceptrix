@@ -18,6 +18,7 @@ interface MarksStats {
   averagePercentage?: number
   totalExams?: number
   passedExams?: number
+  total?: number
 }
 
 export default function ParentDashboard() {
