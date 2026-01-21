@@ -57,12 +57,25 @@
   @apply border-border;
 }
 
-body {
-  @apply bg-background text-foreground antialiased;
-}
-
 html {
   scroll-behavior: smooth;
+}
+
+html.light,
+html.dark {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Smooth theme transition for all elements */
+*,
+*::before,
+*::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
 }
 
 /* Animation Classes */
