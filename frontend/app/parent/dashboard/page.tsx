@@ -7,12 +7,25 @@ import { attendanceAPI, marksAPI } from '@/lib/api/client'
 import { AlertCircle, TrendingDown, Award, Calendar, LogOut } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 
+interface AttendanceStats {
+  percentage?: number
+  present?: number
+  absent?: number
+  total?: number
+}
+
+interface MarksStats {
+  averagePercentage?: number
+  totalExams?: number
+  passedExams?: number
+}
+
 export default function ParentDashboard() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
-  const [attendance, setAttendance] = useState(null)
-  const [marks, setMarks] = useState(null)
+  const [attendance, setAttendance] = useState<AttendanceStats | null>(null)
+  const [marks, setMarks] = useState<MarksStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [showAlert, setShowAlert] = useState(false)
 

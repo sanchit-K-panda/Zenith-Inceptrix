@@ -8,15 +8,53 @@ import { Calendar, BookOpen, Award, FileText, LogOut, Download, StickyNote } fro
 import { ThemeToggle } from '@/components/ThemeToggle'
 import WeeklyCalendar from '@/components/WeeklyCalendar'
 
+interface AttendanceStats {
+  percentage?: number
+  present?: number
+  absent?: number
+  total?: number
+}
+
+interface MarksStats {
+  averagePercentage?: number
+  totalExams?: number
+  passedExams?: number
+}
+
+interface Assignment {
+  _id: string
+  title: string
+  subject: string
+  dueDate: string
+  description?: string
+}
+
+interface Note {
+  _id: string
+  title: string
+  subject: string
+  fileUrl?: string
+  content?: string
+}
+
+interface TimetableEntry {
+  _id: string
+  subject: string
+  day: string
+  startTime: string
+  endTime: string
+  room?: string
+}
+
 export default function StudentDashboard() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
-  const [timetable, setTimetable] = useState([])
-  const [attendance, setAttendance] = useState(null)
-  const [marks, setMarks] = useState(null)
-  const [assignments, setAssignments] = useState([])
-  const [notes, setNotes] = useState([])
+  const [timetable, setTimetable] = useState<TimetableEntry[]>([])
+  const [attendance, setAttendance] = useState<AttendanceStats | null>(null)
+  const [marks, setMarks] = useState<MarksStats | null>(null)
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

@@ -7,13 +7,40 @@ import { timetableAPI, attendanceAPI, assignmentAPI, notesAPI } from '@/lib/api/
 import { Users, Clock, FileText, CheckSquare, LogOut, StickyNote, Plus, X, Upload } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 
+interface TimetableEntry {
+  _id: string
+  subject: string
+  day: string
+  startTime: string
+  endTime: string
+  room?: string
+  class?: string
+}
+
+interface Assignment {
+  _id: string
+  title: string
+  subject: string
+  dueDate: string
+  description?: string
+}
+
+interface Note {
+  _id: string
+  title: string
+  subject: string
+  fileUrl?: string
+  content?: string
+  createdAt?: string
+}
+
 export default function TeacherDashboard() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
-  const [timetable, setTimetable] = useState([])
-  const [assignments, setAssignments] = useState([])
-  const [notes, setNotes] = useState([])
+  const [timetable, setTimetable] = useState<TimetableEntry[]>([])
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ totalClasses: 0, totalStudents: 0 })
   
