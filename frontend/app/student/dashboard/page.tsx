@@ -40,10 +40,19 @@ interface Note {
 interface TimetableEntry {
   _id: string
   subject: string
-  day: string
+  day?: string
+  dayOfWeek: string
   startTime: string
   endTime: string
   room?: string
+  hall?: string
+  teacher?: {
+    userId?: {
+      firstName?: string
+      lastName?: string
+    }
+  }
+  status?: 'ongoing' | 'cancelled' | 'rescheduled' | 'upcoming'
 }
 
 export default function StudentDashboard() {

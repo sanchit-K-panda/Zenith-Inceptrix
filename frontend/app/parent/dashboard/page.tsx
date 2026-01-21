@@ -245,11 +245,11 @@ export default function ParentDashboard() {
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 p-4 rounded-xl">
                 <p className="text-sm text-slate-700 dark:text-slate-300">
                   <strong>Performance Status:</strong> {
-                    marks?.averagePercentage >= 80 
+                    (marks?.averagePercentage ?? 0) >= 80 
                       ? '✓ Excellent' 
-                      : marks?.averagePercentage >= 70 
+                      : (marks?.averagePercentage ?? 0) >= 70 
                         ? '✓ Good' 
-                        : marks?.averagePercentage >= 60 
+                        : (marks?.averagePercentage ?? 0) >= 60 
                           ? '⚠ Needs Improvement' 
                           : '✗ Poor'
                   }
