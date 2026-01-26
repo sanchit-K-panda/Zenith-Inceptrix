@@ -1,17 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/lib/store/authStore'
-import { timetableAPI, attendanceAPI, marksAPI, assignmentAPI, notesAPI } from '@/lib/api/client'
-import { Calendar, BookOpen, Award, FileText, LogOut, Download, StickyNote } from 'lucide-react'
+import {
+  timetableAPI,
+  attendanceAPI,
+  marksAPI,
+  assignmentAPI,
+  notesAPI,
+} from '@/lib/api/client'
+import {
+  Calendar,
+  BookOpen,
+  Award,
+  FileText,
+  LogOut,
+  StickyNote,
+  BarChart3,
+  GraduationCap,
+  User,
+} from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import WeeklyCalendar from '@/components/WeeklyCalendar'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardContent } from '@/components/ui/card'
+import TimetableTab from '@/components/student/TimetableTab'
+import NotesTab from '@/components/student/NotesTab'
+import AssignmentsTab from '@/components/student/AssignmentsTab'
+import AttendanceTab from '@/components/student/AttendanceTab'
 
 interface AttendanceStats {
   percentage?: number
   present?: number
   absent?: number
+  late?: number
   total?: number
 }
 
@@ -27,24 +50,31 @@ interface Assignment {
   subject: string
   dueDate: string
   description?: string
+  maxMarks?: number
+  submissions?: any[]
 }
 
 interface Note {
   _id: string
   title: string
   subject: string
-  fileUrl?: string
   content?: string
+  attachments?: string[]
+  isShared?: boolean
+  creator?: {
+    firstName?: string
+    lastName?: string
+    role?: string
+  }
+  createdAt?: string
 }
 
 interface TimetableEntry {
   _id: string
   subject: string
-  day?: string
   dayOfWeek: string
   startTime: string
   endTime: string
-  room?: string
   hall?: string
   teacher?: {
     userId?: {
@@ -55,16 +85,74 @@ interface TimetableEntry {
   status?: 'ongoing' | 'cancelled' | 'rescheduled' | 'upcoming'
 }
 
+interface AttendanceRecord {
+  _id: string
+  date: string
+  status: 'present' | 'absent' | 'late'
+  subject?: string
+  timetableId?: string
+  timetable?: {
+    subject?: string
+  }
+}
+
+const tabConfig = [
+  { id: 'timetable', label: 'Timetable', icon: Calendar },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'assignments', label: 'Assignments', icon: FileText },
+  { id: 'attendance', label: 'Attendance', icon: BarChart3 },
+]
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+}
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+}
+
 export default function StudentDashboard() {
   const router = useRouter()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
+  const [activeTab, setActiveTab] = useState('timetable')
   const [timetable, setTimetable] = useState<TimetableEntry[]>([])
-  const [attendance, setAttendance] = useState<AttendanceStats | null>(null)
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
+  const [attendanceStats, setAttendanceStats] = useState<AttendanceStats | null>(null)
   const [marks, setMarks] = useState<MarksStats | null>(null)
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [notes, setNotes] = useState<Note[]>([])
   const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [ttRes, attRes, marksRes, assignRes, notesRes] = await Promise.all([
+        timetableAPI.getMyTimetable(),
+        attendanceAPI.getMyAttendance(),
+        marksAPI.getMyMarks(),
+        assignmentAPI.getAssignments(),
+        notesAPI.getStudentNotes(),
+      ])
+
+      setTimetable(ttRes.data)
+      setAttendance(attRes.data.records || attRes.data || [])
+      setAttendanceStats(attRes.data.statistics)
+      setMarks(marksRes.data.statistics)
+      setAssignments(assignRes.data)
+      setNotes(notesRes.data)
+    } catch (error) {
+      console.error('Failed to fetch data:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) {
@@ -72,43 +160,45 @@ export default function StudentDashboard() {
       return
     }
 
-    const fetchData = async () => {
-      try {
-        const [ttRes, attRes, marksRes, assignRes, notesRes] = await Promise.all([
-          timetableAPI.getMyTimetable(),
-          attendanceAPI.getMyAttendance(),
-          marksAPI.getMyMarks(),
-          assignmentAPI.getAssignments(),
-          notesAPI.getStudentNotes(),
-        ])
-
-        setTimetable(ttRes.data)
-        setAttendance(attRes.data.statistics)
-        setMarks(marksRes.data.statistics)
-        setAssignments(assignRes.data)
-        setNotes(notesRes.data)
-      } catch (error) {
-        console.error('Failed to fetch data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchData()
-  }, [user, router])
+  }, [user, router, fetchData])
 
   const handleLogout = () => {
     logout()
     router.push('/login')
   }
 
+  const refreshNotes = () => {
+    notesAPI.getStudentNotes().then((res) => setNotes(res.data))
+  }
+
+  const refreshAssignments = () => {
+    assignmentAPI.getAssignments().then((res) => setAssignments(res.data))
+  }
+
+  // Calculate pending assignments
+  const pendingAssignments = assignments.filter((a) => {
+    const submission = a.submissions?.find((s: any) => s.student === user?.id)
+    return !submission && new Date(a.dueDate) > new Date()
+  }).length
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-200 dark:border-blue-900 border-t-blue-600 dark:border-t-blue-400 rounded-full animate-spin"></div>
-          <p className="text-slate-600 dark:text-slate-400 font-medium">Loading dashboard...</p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex flex-col items-center gap-4"
+        >
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 dark:border-blue-900 rounded-full" />
+            <div className="absolute inset-0 w-16 h-16 border-4 border-blue-600 dark:border-blue-400 border-t-transparent rounded-full animate-spin" />
+          </div>
+          <div className="text-center">
+            <p className="text-slate-600 dark:text-slate-400 font-medium">Loading your dashboard...</p>
+            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Please wait a moment</p>
+          </div>
+        </motion.div>
       </div>
     )
   }
@@ -116,190 +206,199 @@ export default function StudentDashboard() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm dark:shadow-slate-800/50 sticky top-0 z-50 animate-fade-in-down">
-        <div className="max-w-7xl mx-auto px-4 py-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
-              Student Dashboard
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-1">Welcome, {user?.firstName} {user?.lastName}</p>
+      <motion.header
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md shadow-sm dark:shadow-slate-800/50 sticky top-0 z-50 border-b border-slate-200/50 dark:border-slate-700/50"
+      >
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <GraduationCap className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
+                Student Dashboard
+              </h1>
+              <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                <User className="w-3.5 h-3.5" />
+                <span>
+                  {user?.firstName} {user?.lastName}
+                </span>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleLogout}
-              className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-lg font-medium
-                         transition-all duration-200 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400"
+              className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-2.5 rounded-xl font-medium
+                         transition-all duration-200 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400
+                         border border-slate-200 dark:border-slate-700"
             >
               <LogOut size={18} />
-              Logout
-            </button>
+              <span className="hidden sm:inline">Logout</span>
+            </motion.button>
           </div>
         </div>
-      </header>
+      </motion.header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-12">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5
-                          animate-fade-in-up stagger-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Attendance</p>
-                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{attendance?.percentage || 0}%</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center">
-                <Calendar className="text-blue-600 dark:text-blue-400" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5
-                          animate-fade-in-up stagger-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Average Marks</p>
-                <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{marks?.averagePercentage || 0}%</p>
-              </div>
-              <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/50 rounded-xl flex items-center justify-center">
-                <Award className="text-emerald-600 dark:text-emerald-400" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5
-                          animate-fade-in-up stagger-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Assignments</p>
-                <p className="text-3xl font-bold text-violet-600 dark:text-violet-400 mt-1">{assignments.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-violet-100 dark:bg-violet-900/50 rounded-xl flex items-center justify-center">
-                <FileText className="text-violet-600 dark:text-violet-400" size={24} />
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5
-                          animate-fade-in-up stagger-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Classes</p>
-                <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{timetable.length}</p>
-              </div>
-              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/50 rounded-xl flex items-center justify-center">
-                <BookOpen className="text-amber-600 dark:text-amber-400" size={24} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Weekly Calendar Timetable */}
-        <div className="mb-8 animate-fade-in-up stagger-2">
-          <WeeklyCalendar timetable={timetable} />
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg animate-fade-in-up stagger-3">
-            <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-slate-100">Recent Assignments</h3>
-            {assignments.length > 0 ? (
-              assignments.slice(0, 3).map((assignment: any) => (
-                <div key={assignment._id} className="mb-3 pb-3 border-b border-slate-100 dark:border-slate-700 last:border-b-0">
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">{assignment.title}</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{assignment.subject}</p>
-                </div>
-              ))
-            ) : (
-              <p className="text-slate-500 dark:text-slate-400 text-sm">No assignments</p>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg animate-fade-in-up stagger-4">
-            <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-slate-100">Attendance Trend</h3>
-            <div className="text-center py-8">
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">{attendance?.percentage || 0}%</div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                {attendance?.present || 0} Present / {attendance?.total || 0} Classes
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 
-                          transition-all duration-300 hover:shadow-lg animate-fade-in-up stagger-5">
-            <h3 className="font-bold text-lg mb-4 text-slate-900 dark:text-slate-100">Academic Performance</h3>
-            <div className="text-center py-8">
-              <div className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{marks?.averagePercentage || 0}%</div>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Average Score</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Notes Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 p-6 mt-8 animate-fade-in-up">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/50 rounded-xl flex items-center justify-center">
-              <StickyNote className="text-indigo-600 dark:text-indigo-400" size={20} />
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Study Notes</h2>
-          </div>
-          
-          {notes.length > 0 ? (
-            <div className="space-y-6">
-              {/* Group notes by subject */}
-              {Object.entries(
-                notes.reduce((acc: any, note: any) => {
-                  const subject = note.subject || 'General';
-                  if (!acc[subject]) acc[subject] = [];
-                  acc[subject].push(note);
-                  return acc;
-                }, {})
-              ).map(([subject, subjectNotes]: [string, any]) => (
-                <div key={subject}>
-                  <h3 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-3 border-b border-slate-200 dark:border-slate-700 pb-2">{subject}</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {subjectNotes.map((note: any) => (
-                      <div
-                        key={note._id}
-                        className="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-900/50 
-                                   transition-all duration-200 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 hover:-translate-y-0.5"
-                      >
-                        <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-2">{note.title}</h4>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 line-clamp-2">{note.content}</p>
-                        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-500">
-                          <span>By {note.creator?.firstName} {note.creator?.lastName}</span>
-                          <span>{new Date(note.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        {note.attachments && note.attachments.length > 0 && (
-                          <a
-                            href={note.attachments[0]}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-3 flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium
-                                       transition-colors"
-                          >
-                            <Download size={16} />
-                            Download File
-                          </a>
-                        )}
-                      </div>
-                    ))}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Quick Stats */}
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+        >
+          <motion.div variants={cardVariants}>
+            <Card className="border-l-4 border-l-blue-500 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
+                  onClick={() => setActiveTab('attendance')}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+                      Attendance
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">
+                      {attendanceStats?.percentage || 0}%
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center">
+                    <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
-              ))}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={cardVariants}>
+            <Card className="border-l-4 border-l-emerald-500 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+                      Avg. Marks
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                      {marks?.averagePercentage || 0}%
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 dark:bg-emerald-900/50 rounded-xl flex items-center justify-center">
+                    <Award className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={cardVariants}>
+            <Card className="border-l-4 border-l-violet-500 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
+                  onClick={() => setActiveTab('assignments')}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+                      Pending
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-violet-600 dark:text-violet-400">
+                      {pendingAssignments}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-violet-100 dark:bg-violet-900/50 rounded-xl flex items-center justify-center">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-600 dark:text-violet-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={cardVariants}>
+            <Card className="border-l-4 border-l-amber-500 hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 cursor-pointer"
+                  onClick={() => setActiveTab('timetable')}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
+                      Classes
+                    </p>
+                    <p className="text-2xl sm:text-3xl font-bold text-amber-600 dark:text-amber-400">
+                      {timetable.length}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-100 dark:bg-amber-900/50 rounded-xl flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600 dark:text-amber-400" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </motion.div>
+
+        {/* Tabs Navigation */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="bg-white dark:bg-slate-800/50 rounded-2xl p-2 shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+              <TabsList className="w-full grid grid-cols-4 h-auto p-0 bg-transparent">
+                {tabConfig.map((tab) => (
+                  <TabsTrigger
+                    key={tab.id}
+                    value={tab.id}
+                    className="flex items-center justify-center gap-2 py-3 px-2 sm:px-4 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-blue-500/30 rounded-xl transition-all duration-300"
+                  >
+                    <tab.icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="hidden sm:inline font-medium">{tab.label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
             </div>
-          ) : (
-            <p className="text-slate-500 dark:text-slate-400 text-center py-8">No notes available yet</p>
-          )}
-        </div>
+
+            {/* Tab Content with Animation */}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <TabsContent value="timetable" className="mt-0">
+                  <TimetableTab timetable={timetable} attendance={attendance} />
+                </TabsContent>
+
+                <TabsContent value="notes" className="mt-0">
+                  <NotesTab notes={notes} onNotesChange={refreshNotes} />
+                </TabsContent>
+
+                <TabsContent value="assignments" className="mt-0">
+                  <AssignmentsTab
+                    assignments={assignments}
+                    studentId={user?.id}
+                    onAssignmentsChange={refreshAssignments}
+                  />
+                </TabsContent>
+
+                <TabsContent value="attendance" className="mt-0">
+                  <AttendanceTab attendance={attendance} statistics={attendanceStats || undefined} />
+                </TabsContent>
+              </motion.div>
+            </AnimatePresence>
+          </Tabs>
+        </motion.div>
       </main>
+
+      {/* Footer */}
+      <footer className="mt-auto py-6 text-center text-sm text-slate-500 dark:text-slate-400">
+        <p>© 2026 Smart Academic Dashboard. All rights reserved.</p>
+      </footer>
     </div>
   )
 }
+
