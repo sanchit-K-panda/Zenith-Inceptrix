@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import Assignment from '../models/Assignment';
+import Student from '../models/Student';
 import { AuthRequest } from '../middleware/auth';
 
 export const createAssignment = async (req: AuthRequest, res: Response) => {
@@ -26,7 +27,28 @@ export const getAssignments = async (req: AuthRequest, res: Response) => {
   try {
     const { subject } = req.query;
     
-    const query: any = { assignedTo: req.user?.id };
+    // Check user role
+    if (req.user?.role === 'teacher') {
+      // Teachers see assignments they created
+      const query: any = { teacher: req.user.id };
+      if (subject) query.subject = subject;
+
+      const assignments = await Assignment.find(query)
+        .populate('assignedTo')
+        .sort({ dueDate: 1 });
+
+      return res.json(assignments);
+    }
+    
+    // Find the student record by user ID
+    const student = await Student.findOne({ userId: req.user?.id });
+    
+    if (!student) {
+      // If not a student, return empty array
+      return res.json([]);
+    }
+    
+    const query: any = { assignedTo: student._id };
     if (subject) query.subject = subject;
 
     const assignments = await Assignment.find(query)

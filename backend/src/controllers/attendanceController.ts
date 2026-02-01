@@ -58,19 +58,35 @@ export const getMyAttendance = async (req: AuthRequest, res: Response) => {
     }
 
     const attendance = await Attendance.find({ student: student._id })
-      .populate('timetableClass')
+      .populate({
+        path: 'timetableClass',
+        select: 'subject dayOfWeek startTime endTime hall'
+      })
       .sort({ date: -1 });
+
+    // Transform attendance to include subject at top level for easier frontend access
+    const transformedAttendance = attendance.map(record => {
+      const obj = record.toObject();
+      return {
+        ...obj,
+        subject: (obj.timetableClass as any)?.subject || 'Unknown',
+        timetable: obj.timetableClass
+      };
+    });
 
     const total = attendance.length;
     const present = attendance.filter(a => a.status === 'present').length;
-    const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+    const absent = attendance.filter(a => a.status === 'absent').length;
+    const late = attendance.filter(a => a.status === 'late').length;
+    const percentage = total > 0 ? Math.round(((present + late) / total) * 100) : 0;
 
     res.json({
-      attendance,
+      attendance: transformedAttendance,
       statistics: {
         total,
         present,
-        absent: total - present,
+        absent,
+        late,
         percentage
       }
     });

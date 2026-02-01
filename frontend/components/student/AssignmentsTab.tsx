@@ -160,13 +160,15 @@ export default function AssignmentsTab({
 
   // Get unique subjects
   const subjects = useMemo(() => {
-    const subjectSet = new Set(assignments.map((a) => a.subject).filter(Boolean))
+    const assignmentsArray = Array.isArray(assignments) ? assignments : []
+    const subjectSet = new Set(assignmentsArray.map((a) => a.subject).filter(Boolean))
     return Array.from(subjectSet).sort()
   }, [assignments])
 
   // Filter assignments
   const filteredAssignments = useMemo(() => {
-    return assignments.filter((assignment) => {
+    const assignmentsArray = Array.isArray(assignments) ? assignments : []
+    return assignmentsArray.filter((assignment) => {
       const matchesSearch =
         assignment.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         assignment.subject?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -188,7 +190,8 @@ export default function AssignmentsTab({
     let late = 0
     let graded = 0
 
-    assignments.forEach((assignment) => {
+    const assignmentsArray = Array.isArray(assignments) ? assignments : []
+    assignmentsArray.forEach((assignment) => {
       const { status } = getSubmissionStatus(assignment, studentId)
       if (status === 'submitted') submitted++
       else if (status === 'pending') pending++
@@ -196,7 +199,7 @@ export default function AssignmentsTab({
       else if (status === 'graded') graded++
     })
 
-    return { submitted, pending, late, graded, total: assignments.length }
+    return { submitted, pending, late, graded, total: assignmentsArray.length }
   }, [assignments, studentId])
 
   const completionRate = stats.total > 0 

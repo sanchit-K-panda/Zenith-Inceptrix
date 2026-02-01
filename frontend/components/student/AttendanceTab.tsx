@@ -107,7 +107,8 @@ export default function AttendanceTab({ attendance, statistics }: AttendanceTabP
       { present: number; absent: number; late: number; total: number }
     > = {}
 
-    attendance.forEach((record) => {
+    const attendanceArray = Array.isArray(attendance) ? attendance : []
+    attendanceArray.forEach((record) => {
       const subject = record.subject || record.timetable?.subject || 'Unknown'
       if (!grouped[subject]) {
         grouped[subject] = { present: 0, absent: 0, late: 0, total: 0 }
@@ -129,19 +130,21 @@ export default function AttendanceTab({ attendance, statistics }: AttendanceTabP
 
   // Recent attendance records
   const recentAttendance = useMemo(() => {
-    return [...attendance]
+    const attendanceArray = Array.isArray(attendance) ? attendance : []
+    return [...attendanceArray]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 10)
   }, [attendance])
 
   // Calculate monthly trend
   const monthlyTrend = useMemo(() => {
+    const attendanceArray = Array.isArray(attendance) ? attendance : []
     const now = new Date()
-    const thisMonth = attendance.filter((record) => {
+    const thisMonth = attendanceArray.filter((record) => {
       const date = new Date(record.date)
       return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear()
     })
-    const lastMonth = attendance.filter((record) => {
+    const lastMonth = attendanceArray.filter((record) => {
       const date = new Date(record.date)
       const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       return (

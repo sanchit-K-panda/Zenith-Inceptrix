@@ -81,20 +81,23 @@ export const deleteNote = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// Get notes shared with the logged-in student (uploaded by teachers)
+// Get notes shared with the logged-in student (uploaded by teachers) AND student's own notes
 export const getStudentNotes = async (req: AuthRequest, res: Response) => {
   try {
     const { subject } = req.query;
 
+    // Get both: notes shared with student by teachers AND student's own notes
     const query: any = {
-      sharedWith: req.user?.id,
-      creatorRole: 'teacher'
+      $or: [
+        { sharedWith: req.user?.id, creatorRole: 'teacher' },  // Teacher-shared notes
+        { creator: req.user?.id }  // Student's own notes
+      ]
     };
 
     if (subject) query.subject = subject;
 
     const notes = await Note.find(query)
-      .populate('creator', 'firstName lastName')
+      .populate('creator', 'firstName lastName role')
       .sort({ createdAt: -1 });
 
     res.json(notes);

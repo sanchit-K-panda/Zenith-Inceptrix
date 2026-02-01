@@ -89,13 +89,15 @@ export default function NotesTab({ notes, onNotesChange }: NotesTabProps) {
 
   // Get unique subjects
   const subjects = useMemo(() => {
-    const subjectSet = new Set(notes.map(note => note.subject).filter(Boolean))
+    const notesArray = Array.isArray(notes) ? notes : []
+    const subjectSet = new Set(notesArray.map(note => note.subject).filter(Boolean))
     return Array.from(subjectSet).sort()
   }, [notes])
 
   // Filter notes
   const filteredNotes = useMemo(() => {
-    return notes.filter(note => {
+    const notesArray = Array.isArray(notes) ? notes : []
+    return notesArray.filter(note => {
       const matchesSearch =
         note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         note.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||

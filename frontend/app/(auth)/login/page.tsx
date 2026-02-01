@@ -22,7 +22,13 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await authAPI.login(formData.email, formData.password)
+      // Try demo login first, then regular login
+      let response;
+      try {
+        response = await authAPI.demoLogin(formData.email, formData.password)
+      } catch {
+        response = await authAPI.login(formData.email, formData.password)
+      }
       const { token, user } = response.data
 
       login(user, token)
@@ -45,9 +51,35 @@ export default function LoginPage() {
           router.push('/dashboard')
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed')
+      setError(err.response?.data?.message || 'Login failed. Make sure backend is running.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDemoLogin = async (role: string) => {
+    const credentials: Record<string, { email: string; password: string }> = {
+      student: { email: 'student@demo.com', password: 'demo123' },
+      teacher: { email: 'teacher@demo.com', password: 'demo123' },
+      parent: { email: 'parent@demo.com', password: 'demo123' },
+    }
+    
+    const cred = credentials[role]
+    if (cred) {
+      setFormData(cred)
+      setError('')
+      setLoading(true)
+      
+      try {
+        const response = await authAPI.demoLogin(cred.email, cred.password)
+        const { token, user } = response.data
+        login(user, token)
+        router.push(`/${role}/dashboard`)
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Demo login failed. Make sure backend is running.')
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -132,13 +164,33 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-8 border-t border-slate-100 dark:border-slate-700 pt-6">
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 font-semibold">Demo Credentials:</p>
-            <div className="space-y-2 text-sm bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
-              <p className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Student:</span> <span className="font-mono text-slate-700 dark:text-slate-300">student1@dashboard.com</span></p>
-              <p className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Teacher:</span> <span className="font-mono text-slate-700 dark:text-slate-300">teacher1@dashboard.com</span></p>
-              <p className="flex justify-between"><span className="text-slate-500 dark:text-slate-400">Parent:</span> <span className="font-mono text-slate-700 dark:text-slate-300">parent1@dashboard.com</span></p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-200 dark:border-slate-600">Password for all: Role@123 (e.g., Student@123)</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 font-semibold">Quick Demo Login:</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleDemoLogin('student')}
+                disabled={loading}
+                className="px-3 py-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
+              >
+                Student
+              </button>
+              <button
+                onClick={() => handleDemoLogin('teacher')}
+                disabled={loading}
+                className="px-3 py-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
+              >
+                Teacher
+              </button>
+              <button
+                onClick={() => handleDemoLogin('parent')}
+                disabled={loading}
+                className="px-3 py-2 bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-lg text-sm font-medium hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+              >
+                Parent
+              </button>
             </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
+              Click any button above to instantly login as that role
+            </p>
           </div>
         </div>
       </div>

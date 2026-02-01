@@ -95,9 +95,12 @@ export default function TimetableTab({ timetable, attendance = [] }: TimetableTa
 
   // Convert timetable to FullCalendar events
   const calendarEvents = useMemo(() => {
+    if (!timetable || !Array.isArray(timetable)) return []
+    const attendanceArray = Array.isArray(attendance) ? attendance : []
+    
     return timetable.map((entry) => {
       const date = getNextDateForDay(entry.dayOfWeek)
-      const attendanceRecord = attendance.find(a => a.timetableId === entry._id)
+      const attendanceRecord = attendanceArray.find(a => a.timetableId === entry._id)
       const backgroundColor = getStatusColor(entry.status, attendanceRecord?.status)
       
       return {

@@ -4,7 +4,7 @@ export interface IAttendance extends Document {
   student: mongoose.Types.ObjectId;
   timetableClass: mongoose.Types.ObjectId;
   date: Date;
-  status: 'present' | 'absent' | 'leave';
+  status: 'present' | 'absent' | 'late';
   markedBy: mongoose.Types.ObjectId;
   remarks?: string;
 }
@@ -28,7 +28,7 @@ const attendanceSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['present', 'absent', 'leave'],
+      enum: ['present', 'absent', 'late'],
       required: true
     },
     markedBy: {
